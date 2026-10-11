@@ -5,11 +5,11 @@ from typing import List, Optional, Tuple
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGroupBox, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QSpinBox, QSystemTrayIcon, QTabWidget, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
+    QPushButton, QScrollArea, QSpinBox, QSystemTrayIcon, QTabWidget, QVBoxLayout, QWidget,
 )
 
-from spette import cuda_libs, local_stt
+from spette import cuda_libs, google_stt, keystore, local_stt
 from spette.hotkey_edit import HotkeyEdit
 from spette.hotkeys import MODE_PUSH, MODE_TOGGLE, MODIFIERS, backend_status, combo_to_setting, parse_combo
 from spette.logger import get_logger
@@ -160,6 +160,7 @@ class SettingsDialog(QDialog):
         self.note.setWordWrap(True)
         self.note.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self.note)
+        self._setup_google_box(layout)
 
         # --- window and tray
         tray_box = QGroupBox("Window and tray")
@@ -244,6 +245,53 @@ class SettingsDialog(QDialog):
         self._update_visibility()
         self._update_model_status()
 
+    def _setup_google_box(self, layout: QVBoxLayout):
+        box = QGroupBox("Google recognition: warning and optional key")
+        self.google_box = box
+        column = QVBoxLayout(box)
+        warning = QLabel(google_stt.SHARED_KEY_WARNING)
+        warning.setWordWrap(True)
+        warning.setTextFormat(Qt.TextFormat.PlainText)
+        column.addWidget(warning)
+        row = QHBoxLayout()
+        self.google_key_edit = QLineEdit()
+        self.google_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.google_key_edit.setPlaceholderText("Your own Google API key (optional)")
+        self.google_key_edit.setMaxLength(keystore.MAX_LENGTH + 20)
+        self.google_key_edit.setToolTip("Optional. Leave empty to use the shared free key. A key is kept in the "
+                                        "system keyring, never in the settings file or the log.")
+        row.addWidget(self.google_key_edit, 1)
+        self.google_key_remove = QPushButton("Remove key")
+        self.google_key_remove.clicked.connect(self._remove_google_key)
+        row.addWidget(self.google_key_remove)
+        column.addLayout(row)
+        self.google_key_status = QLabel("")
+        self.google_key_status.setWordWrap(True)
+        self.google_key_status.setTextFormat(Qt.TextFormat.PlainText)
+        column.addWidget(self.google_key_status)
+        layout.addWidget(box)
+        self._refresh_google_key()
+
+    def _refresh_google_key(self, message: str = ""):
+        usable, why_not = keystore.available()
+        self.google_key_edit.setEnabled(usable)
+        stored = usable and keystore.has_key()
+        self.google_key_remove.setEnabled(stored)
+        if message:
+            text = message
+        elif not usable:
+            text = why_not + " The shared free key is used."
+        elif stored:
+            text = "Your own key is stored in the system keyring and is used. Type a new one to replace it."
+        else:
+            text = "No key of your own: the shared free key is used."
+        self.google_key_status.setText(text)
+
+    def _remove_google_key(self):
+        keystore.delete()
+        self.google_key_edit.clear()
+        self._refresh_google_key("The key was removed. The shared free key is used.")
+
     def _update_hotkey_enabled(self):
         enabled = self.hotkey_check.isChecked()
         self.hotkey_edit.setEnabled(enabled)
@@ -268,6 +316,14 @@ class SettingsDialog(QDialog):
                 self.model_combo.currentData(), self.device_combo.currentData())
 
     def accept(self):
+        typed = self.google_key_edit.text().strip()
+        if typed and self.google_key_edit.isEnabled():
+            problem = keystore.set_key(typed)
+            if problem:
+                self.tabs.setCurrentIndex(0)
+                self._refresh_google_key(problem)
+                return                              # stay open: the key was not stored
+            self.google_key_edit.clear()
         s = self.settings.stt
         (s.provider, s.language, s.device_index, s.max_seconds,
          s.whisper_model, s.whisper_device) = self.values()
@@ -292,6 +348,7 @@ class SettingsDialog(QDialog):
     def _update_visibility(self):
         local = self.provider_combo.currentData() == "whisper"
         self.whisper_box.setVisible(local)
+        self.google_box.setVisible(not local)
         self.note.setText(
             "The audio is processed on this computer. The first use of a model downloads it once."
             if local else

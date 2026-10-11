@@ -91,13 +91,17 @@ class TranscriptionWorker(QThread):
             import speech_recognition as sr
         except ImportError:
             raise _UserMessage("Speech recognition is not available in this build.")
-        self.status.emit(f"Transcribing with Google ({self.language})...")
+        from spette import google_stt, keystore
+        key = keystore.get()                    # read here: a keyring can take a moment to answer
+        self.status.emit(f"Transcribing with Google ({self.language})"
+                         + (" with your own key" if key else " with the shared free key") + "...")
         try:
-            return sr.Recognizer().recognize_google(self.audio_data, language=self.language)
+            return google_stt.recognize(self.audio_data, self.language, key)
         except sr.UnknownValueError:
-            raise _UserMessage("Could not understand the audio.")
+            raise _UserMessage("Google could not understand the audio (the connection and the key are fine).")
         except sr.RequestError as e:
-            raise _UserMessage(f"Google could not be reached: {e}")
+            self.logger.warning(f"Google request failed: {google_stt.explain_request_error(e, key)[:200]}")
+            raise _UserMessage(google_stt.explain_request_error(e, key))
 
     def _whisper(self) -> str:
         """Local, offline transcription (GPU when usable, otherwise CPU)."""

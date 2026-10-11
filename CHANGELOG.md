@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.5.0-beta.2] - 2026-10-12
+
+### Added
+- Google recognition: a clear **warning** in Settings (the audio goes to Google; the free shared key can be limited or switched off at any time) and plain **error messages** that tell apart: no connection, too many requests, a refused key (the shared one or yours), and audio that could not be understood. Each suggests local Whisper.
+- An **optional Google API key** field in Settings. The key is kept only in the system keyring (Windows Credential Manager, Linux Secret Service): never in the settings file, the log or an error message. Without a keyring the field is disabled instead of storing the key in a file. "Remove key" deletes it.
+
 ### Fixed
 - If the microphone stops by itself during a recording (for example a USB microphone is unplugged), the result now says that the end may be missing, instead of silently using the shorter recording.
 - The model is no longer unloaded by the idle timer right after you start a new recording.

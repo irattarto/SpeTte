@@ -18,7 +18,9 @@ ICON = str(_ico) if IS_WINDOWS and _ico.exists() else None
 datas = [(str(project_root / 'data'), 'data'), (str(project_root / 'README.md'), '.'),
          (str(project_root / 'LICENSE'), '.'), (str(project_root / 'THIRD_PARTY_NOTICES.md'), '.')]
 binaries = []
-hiddenimports = []
+# keyring finds its backends through entry points, which PyInstaller does not see: name them
+hiddenimports = ['keyring.backends.Windows', 'keyring.backends.SecretService', 'keyring.backends.kwallet',
+                 'keyring.backends.libsecret', 'keyring.backends.fail', 'keyring.backends.null']
 
 
 # Parts of a package that only tools need. Importing them while PyInstaller collects the package crashed its
@@ -38,7 +40,8 @@ def _optional(pkg):
 
 
 for _pkg in ('pyaudio', 'speech_recognition', 'faster_whisper', 'ctranslate2', 'onnxruntime', 'av', 'tokenizers',
-             'pynput', 'Xlib'):   # pynput: system-wide shortcut (Xlib is its Linux backend)
+             'pynput', 'Xlib',   # pynput: system-wide shortcut (Xlib is its Linux backend)
+             'keyring', 'win32ctypes', 'secretstorage', 'jeepney'):   # keyring and its Windows/Linux backends
     _optional(_pkg)
 
 _excludes = [

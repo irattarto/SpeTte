@@ -47,3 +47,31 @@ def settings(tmp_path):
     loaded = Settings(QSettings(str(tmp_path / "spette.ini"), QSettings.Format.IniFormat))
     loaded.stt.hotkey_enabled = False        # tests never listen to the real keyboard
     return loaded
+
+
+@pytest.fixture(autouse=True)
+def memory_keyring():
+    """Tests never touch the real system keyring."""
+    import keyring
+    from keyring.backend import KeyringBackend
+
+    class MemoryKeyring(KeyringBackend):
+        priority = 1
+
+        def __init__(self):
+            self.items = {}
+
+        def get_password(self, service, username):
+            return self.items.get((service, username))
+
+        def set_password(self, service, username, password):
+            self.items[(service, username)] = password
+
+        def delete_password(self, service, username):
+            self.items.pop((service, username), None)
+
+    previous = keyring.get_keyring()
+    backend = MemoryKeyring()
+    keyring.set_keyring(backend)
+    yield backend
+    keyring.set_keyring(previous)

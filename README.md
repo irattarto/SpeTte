@@ -11,7 +11,7 @@ A small speech-to-text program for Windows and Linux. One window with a text box
 
 | Setting | What it does |
 |---|---|
-| Recognition | **Local, offline (Whisper)**: runs on your computer, nothing is sent anywhere. **Google**: sends the audio to Google (internet needed, at most 60 s per recording). |
+| Recognition | **Local, offline (Whisper)**: runs on your computer, nothing is sent anywhere. **Google**: sends the audio to Google (internet needed, at most 60 s per recording). It uses a free public key shared by all users of the speech library, which Google can limit or switch off at any time; SpeTte then says so and suggests local recognition. Settings can hold a key of your own (optional): it is kept in the system keyring (Windows Credential Manager, the Linux Secret Service), never in the settings file or the log; without a keyring the field is disabled. |
 | Language | Hungarian, English (US/UK), German, French, Spanish, Italian, Portuguese (Brazil), Russian, Japanese, Korean, Chinese (Simplified). |
 | Microphone | The system default or a specific input device. |
 | Longest recording | A recording stops by itself after 30 to 480 seconds. |

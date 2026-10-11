@@ -15,7 +15,8 @@ REQUIRED_FILES = (
 )
 REQUIRED_MODULES = (
     "PyQt6.QtWidgets", "speech_recognition", "pyaudio",
-    "faster_whisper", "ctranslate2", "onnxruntime", "av", "pynput", "requests",
+    "faster_whisper", "ctranslate2", "onnxruntime", "av", "pynput", "requests", "keyring",
+    "spette.keystore",
     "spette.main_window",
 )
 

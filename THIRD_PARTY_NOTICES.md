@@ -13,6 +13,7 @@ software. Each keeps its own licence; the full texts are in the packages themsel
 | PyAudio / PortAudio | microphone | MIT |
 | PyAV (FFmpeg libraries) | reading audio | BSD-3-Clause / LGPL v2.1+ |
 | pynput, python-xlib | system-wide shortcut | LGPL v3 / LGPL v2.1+ |
+| keyring (with pywin32-ctypes on Windows, SecretStorage and jeepney on Linux) | keeping the optional Google API key in the system keyring | MIT, BSD-3-Clause, BSD-3-Clause, MIT |
 | requests | one-time NVIDIA library download | Apache-2.0 |
 | NVIDIA CUDA runtime libraries (Windows, downloaded on request) | GPU recognition | NVIDIA CUDA EULA |
 | PyInstaller | packaging only | GPL v2+ with the bootloader exception |
