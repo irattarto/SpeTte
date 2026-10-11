@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+.Python
+pip-wheel-metadata/
+pip-log.txt
+*.whl
+
+# virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# tests, coverage and linters
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# build outputs (PyInstaller, Inno Setup, AppImage) and downloaded release files
+build/
+dist/
+installer-output/
+*.spec.bak
+data/icons/app_icon.ico
+selfcheck.txt
+*.AppImage
+*.exe
+*.zip
+*.tar.gz
+*.bundle
+
+# logs and temporary files
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+
+# editors, assistants, operating system
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# secrets and local settings
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12

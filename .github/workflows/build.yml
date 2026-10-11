@@ -1,0 +1,226 @@
+name: Build executables
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_prerelease:
+        description: "Also publish the builds as a GitHub pre-release (easy download link)"
+        type: boolean
+        default: false
+  push:
+    tags: ["v*"]
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Plan release
+    runs-on: ubuntu-22.04
+    outputs:
+      publish: ${{ steps.rel.outputs.publish }}
+      tag: ${{ steps.rel.outputs.tag }}
+      prerelease: ${{ steps.rel.outputs.prerelease }}
+    steps:
+      # A version tag (v1.2.3, v1.2.3-beta.1), a manual run with the box ticked, or a push to main whose
+      # message contains "[pre-release v1.2.3-beta.1]" (for cases where tags cannot be pushed directly)
+      - name: Decide whether to publish, the release tag and whether it is a pre-release
+        id: rel
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+          PUBLISH_MANUAL: ${{ inputs.publish_prerelease }}
+        run: |
+          set -euo pipefail
+          publish=false
+          tag="test-build-${GITHUB_RUN_NUMBER}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            publish=true
+            tag="${GITHUB_REF_NAME}"
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${PUBLISH_MANUAL}" == "true" ]]; then
+            publish=true
+          elif [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == "refs/heads/main"                   && "${MESSAGE}" =~ \[pre-release\ (v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?)\] ]]; then
+            publish=true
+            tag="${BASH_REMATCH[1]}"
+          fi
+          pre=true
+          if [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] && [[ "${MESSAGE}" != *"[pre-release v"* ]]; then pre=false; fi
+          echo "publish=${publish}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${pre}" >> "$GITHUB_OUTPUT"
+
+  windows:
+    name: Windows (x64)
+    needs: plan
+    runs-on: windows-latest
+    permissions:
+      contents: write   # attaches the files to the release (release assets do not count against the artifact quota)
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false   # the token (write access) must not stay in .git/config where later steps could read it
+      - name: Check that the release tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = Select-String -Path spette\version.py -Pattern '^__version__ = "(.+)"' | ForEach-Object { $_.Matches[0].Groups[1].Value }
+          # v1.6.0 or a pre-release such as v1.6.0-beta.1 (the part before the first '-' must match)
+          $tagBase = ("${{ github.ref_name }}" -split '-')[0]
+          if ("v$version" -ne $tagBase) { Write-Error "Tag ${{ github.ref_name }} does not match spette/version.py (v$version)"; exit 1 }
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install --require-hashes -r requirements-windows.lock   # exact versions, every file hash-checked
+      - name: Check that microphone support (PyAudio) is installed
+        run: python -c "import pyaudio; p = pyaudio.PyAudio(); p.terminate(); print('PyAudio', pyaudio.__version__)"
+      - name: Create Windows icon from the PNG
+        run: python -c "from PIL import Image; Image.open('data/icons/app_icon.png').convert('RGBA').save('data/icons/app_icon.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+      - name: Run tests (each test file in its own process, so one cannot take the others down)
+        shell: pwsh
+        run: |
+          $failed = @()
+          foreach ($f in Get-ChildItem tests\test_*.py | Sort-Object Name) {
+            Write-Host "=== $($f.Name)"
+            python -X faulthandler -m pytest -q "tests/$($f.Name)" 2>&1 | Select-Object -Last 40
+            if ($LASTEXITCODE -ne 0) {
+              $failed += "$($f.Name) (exit $LASTEXITCODE)"
+              # the same file once more, unbuffered and verbose: the last line shows where the process died
+              Write-Host "--- unbuffered rerun of $($f.Name)"
+              python -u -X faulthandler -m pytest -v -s -p no:cacheprovider "tests/$($f.Name)" 2>&1 | Select-Object -Last 30
+              Write-Host "--- exit code of the rerun: $LASTEXITCODE"
+              # which earlier test makes the streams test crash? every test of the file followed by that one
+              $victim = "tests/test_robustness.py::test_streams_exist_in_a_windowed_program"
+              $ids0 = python -m pytest --collect-only -q "tests/$($f.Name)" 2>&1 | Where-Object { $_ -match "::" }
+              foreach ($id in $ids0) {
+                if ($id -ne $victim) {
+                  python -m pytest -q -x -p no:cacheprovider $id $victim *> $null
+                  if ($LASTEXITCODE -ne 0) { Write-Host "  PAIR CRASHES: $id then streams test (exit $LASTEXITCODE)" }
+                }
+              }
+              # find the test that brings the file down: every test of the file in a process of its own
+              $ids = python -m pytest --collect-only -q "tests/$($f.Name)" 2>&1 | Where-Object { $_ -match "::" }
+              foreach ($id in $ids) {
+                python -m pytest -q -x $id *> $null
+                if ($LASTEXITCODE -ne 0) { Write-Host "  CRASHES/FAILS ALONE: $id (exit $LASTEXITCODE)" }
+              }
+            }
+          }
+          if ($failed.Count -gt 0) { Write-Error ("Failed: " + ($failed -join ", ")); exit 1 }
+        env:
+          QT_QPA_PLATFORM: offscreen
+      - name: Build
+        run: pyinstaller --noconfirm SpeTte.spec
+      - name: Self-check the package (bundled files and libraries)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\SpeTte\SpeTte.exe" -ArgumentList "--selfcheck","selfcheck.txt" -Wait -PassThru
+          Get-Content selfcheck.txt
+          if ($p.ExitCode -ne 0) { Write-Error "Self-check failed"; exit 1 }
+      - name: Smoke test the executable (must still be running after 12 s)
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $env:HOME = "$env:RUNNER_TEMP\smoke-home"
+          $p = Start-Process -FilePath "dist\SpeTte\SpeTte.exe" -PassThru
+          Start-Sleep -Seconds 12
+          if ($p.HasExited) { Write-Error "Executable exited early with code $($p.ExitCode)"; exit 1 }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "Executable started and stayed running."
+      - name: Package (zip)
+        shell: pwsh
+        run: Compress-Archive -Path dist\SpeTte -DestinationPath SpeTte-windows-x64.zip
+      - name: Build the installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          $version = python -c "from spette.version import __version__; print(__version__)"
+          & $iscc "/DAppVersion=$version" packaging\windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Move-Item installer-output\SpeTte-Setup-x64.exe .
+      - name: Smoke test the installer (silent install, start, uninstall)
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $env:HOME = "$env:RUNNER_TEMP\smoke-home2"
+          $dir = "$env:RUNNER_TEMP\installed"
+          Start-Process -FilePath .\SpeTte-Setup-x64.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=$dir" -Wait
+          if (-not (Test-Path "$dir\SpeTte.exe")) { Write-Error "Installer did not install the program"; exit 1 }
+          $p = Start-Process -FilePath "$dir\SpeTte.exe" -PassThru
+          Start-Sleep -Seconds 12
+          if ($p.HasExited) { Write-Error "Installed program exited early with code $($p.ExitCode)"; exit 1 }
+          Stop-Process -Id $p.Id -Force
+          Start-Sleep -Seconds 2
+          Start-Process -FilePath "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait
+          Write-Host "Installer installed, ran and uninstalled."
+      # Release builds go straight to the release; other runs only check that everything builds
+      - name: Attach the files to the release
+        if: needs.plan.outputs.publish == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          PRE: ${{ needs.plan.outputs.prerelease }}
+        run: |
+          $flags = @(); if ($env:PRE -eq 'true') { $flags += '--prerelease' }
+          gh release create $env:TAG --target $env:GITHUB_SHA --title $env:TAG --generate-notes @flags 2>$null; $global:LASTEXITCODE = 0
+          gh release upload $env:TAG SpeTte-Setup-x64.exe SpeTte-windows-x64.zip --clobber
+
+  linux:
+    name: Linux (x64)
+    needs: plan
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false   # the token (write access) must not stay in .git/config where later steps could read it
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: System libraries
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0 portaudio19-dev libasound2-dev libpulse0 libfuse2
+      - name: Install dependencies
+        run: pip install --require-hashes -r requirements-linux.lock   # exact versions, every file hash-checked
+      - name: Check that microphone support (PyAudio) is installed
+        run: python -c "import pyaudio; p = pyaudio.PyAudio(); p.terminate(); print('PyAudio', pyaudio.__version__)"
+      - name: Run tests
+        run: python -m pytest -q
+        env:
+          QT_QPA_PLATFORM: offscreen
+      - name: Build
+        run: pyinstaller --noconfirm SpeTte.spec
+      - name: Self-check the package (bundled files and libraries)
+        run: |
+          code=0
+          QT_QPA_PLATFORM=offscreen dist/spette/spette --selfcheck selfcheck.txt || code=$?
+          cat selfcheck.txt || echo "No report was written (the program crashed?)"
+          exit $code
+      - name: Smoke test the executable (must still be running after 12 s)
+        run: |
+          export QT_QPA_PLATFORM=offscreen HOME="$RUNNER_TEMP/smoke-home"
+          mkdir -p "$HOME"
+          dist/spette/spette &
+          pid=$!
+          sleep 12
+          kill -0 "$pid" && echo "Executable started and stayed running." && kill "$pid"
+      - name: Package (AppImage and tar.gz)
+        run: |
+          packaging/linux/build_appimage.sh
+          tar czf SpeTte-linux-x64.tar.gz -C dist spette
+      # Release builds go straight to the release; other runs only check that everything builds
+      - name: Attach the files to the release
+        if: needs.plan.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          PRE: ${{ needs.plan.outputs.prerelease }}
+        run: |
+          flags=(); [ "$PRE" = true ] && flags+=(--prerelease)
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes "${flags[@]}" || true   # the other platform job may have created it already
+          gh release upload "$TAG" SpeTte-x86_64.AppImage SpeTte-linux-x64.tar.gz --clobber

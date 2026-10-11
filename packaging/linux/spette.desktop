@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=SpeTte
+Comment=Speech to text in a simple window
+Exec=spette
+Icon=spette
+Categories=Utility;Audio;
+Terminal=false

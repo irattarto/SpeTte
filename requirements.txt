@@ -1,0 +1,10 @@
+# SpeTte - dependencies (Python 3.10+)
+PyQt6>=6.9.1
+SpeechRecognition>=3.17.0     # microphone access and the optional Google recognizer
+PyAudio>=0.2.14               # microphone (Linux needs portaudio19-dev to build)
+faster-whisper>=1.2.1         # local, offline recognition
+av>=11,<19                    # PyAV 19 removed av.open(metadata_errors=...), which faster-whisper 1.2.x still passes
+requests>=2.34.2              # one-time NVIDIA GPU library download (Windows)
+numpy>=1.26                   # audio decoding (faster-whisper)
+pytest>=9.1.1
+pynput>=1.8.1                  # system-wide recording shortcut (Windows, Linux X11/XWayland)
