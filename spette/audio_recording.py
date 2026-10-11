@@ -71,6 +71,7 @@ class AudioRecordingThread(QThread):
         self.device_index = device_index
         self.device_name = device_name
         self._stop_requested = False
+        self.interrupted = False        # the microphone stream failed before the user stopped: the end may be missing
         self._frames = []
         self.logger = get_logger('audio_recording')
 
@@ -137,7 +138,8 @@ class AudioRecordingThread(QThread):
                             if chunk:
                                 self._frames.append(chunk)
                         except Exception as e:
-                            self.logger.debug(f"Stream read error: {e}")
+                            self.logger.warning(f"Stream read error: {e}")
+                            self.interrupted = True
                             break
 
                 # Convert frames to AudioData

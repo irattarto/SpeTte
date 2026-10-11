@@ -181,11 +181,9 @@ def test_bundle_library_paths_are_taken_out_of_the_child_environment(monkeypatch
     assert "LD_LIBRARY_PATH" not in empty_orig
 
 
-def test_python_child_gets_no_foreign_python_variables():
-    env = envutil.clean_environment({"X": "1"}, python_child=True,
-                                    base={"PYTHONHOME": "/a", "PYTHONPATH": "/b", "KEEP": "me"})
-    assert env == {"KEEP": "me", "X": "1"}
-    assert envutil.clean_environment(base={"PYTHONPATH": "/b"})["PYTHONPATH"] == "/b"
+def test_extra_variables_are_added_and_the_rest_is_kept():
+    env = envutil.clean_environment({"X": "1"}, base={"PYTHONPATH": "/b", "KEEP": "me"})
+    assert env == {"PYTHONPATH": "/b", "KEEP": "me", "X": "1"}
 
 
 # ------------------------------------------------------------------------ windowed program

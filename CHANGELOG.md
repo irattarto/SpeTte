@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Fixed
+- If the microphone stops by itself during a recording (for example a USB microphone is unplugged), the result now says that the end may be missing, instead of silently using the shorter recording.
+- The model is no longer unloaded by the idle timer right after you start a new recording.
+- The recognised text is no longer written to the log file when a segment is dropped as noise.
+
+### Security
+- The GPU library download now checks the files against fixed versions, SHA-256 hashes and sizes built into the program (before, the hash came from the same PyPI answer as the download address), only accepts the download address from `files.pythonhosted.org`, and refuses a download or an unpacked file that is larger than expected.
+- Build: a release must now match the version in the program however it is started (before, only version tags were checked); a failed release creation or upload now fails the build; the tag name is no longer pasted into a script; tests are no longer a runtime dependency (`requirements-dev.txt`).
+
 ## [0.5.0-beta.1] - 2026-10-12
 
 ### Removed

@@ -34,6 +34,7 @@ class MainWindow(QMainWindow):
         self._cuda_worker = None
         self._gpu_download_failed = False
         self._quitting = False
+        self._recording_cut = False             # the microphone stopped by itself during the last recording
         self._background_recording = False      # the current recording was started while SpeTte was in the background
         self._tray_hint_shown = False
         self._tray_available = QSystemTrayIcon.isSystemTrayAvailable()
@@ -351,6 +352,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("The previous recording is still closing, try again in a moment.", 4000)
             return
         stt = self.settings.stt
+        self._whisper_idle.stop()                # the model is about to be used: do not unload it meanwhile
         self._background_recording = self.is_in_background()
         self._recording = True
         self.record_button.setText(STOP_TEXT)
@@ -402,6 +404,7 @@ class MainWindow(QMainWindow):
     def _on_recording_finished(self, audio_data):
         self._timeout.stop()
         self._recording = False
+        self._recording_cut = bool(self._recording_thread is not None and self._recording_thread.interrupted)
         self._refresh_state()
         if not audio_data or len(audio_data.frame_data) == 0:
             self._set_idle_buttons()
@@ -451,7 +454,9 @@ class MainWindow(QMainWindow):
         copied = background and stt.background_copy
         if copied:
             QGuiApplication.clipboard().setText(text)
-        self.statusBar().showMessage("✅ Done." + (" Copied to the clipboard." if copied else ""), 5000)
+        note = " The microphone stopped early: the end may be missing." if self._recording_cut else ""
+        self.statusBar().showMessage("✅ Done." + (" Copied to the clipboard." if copied else "") + note,
+                                     8000 if note else 5000)
         self._flash_done(bool(copied))             # green for a moment, whether the window is in front or not
         if not self.isVisible() and self._tray_available:
             note = "Copied to the clipboard." if copied else "Open SpeTte to copy it."

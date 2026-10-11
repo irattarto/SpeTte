@@ -38,6 +38,7 @@ On Windows, allow microphone access for desktop apps (Settings > Privacy & secur
 ```
 pip install -r requirements.txt     # Linux needs portaudio19-dev to build PyAudio
 python main.py
+pip install -r requirements-dev.txt   # only for the tests
 python -m pytest
 ```
 

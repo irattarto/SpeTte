@@ -54,6 +54,7 @@ def test_record_button_cycle(app, settings, monkeypatch):
     started = []
 
     class FakeThread:
+        interrupted = False
         def __init__(self, device_index=None, device_name=""):
             from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -279,6 +280,7 @@ def test_background_is_decided_when_the_recording_starts(app, settings, monkeypa
     monkeypatch.setattr(main_window, "microphone_support_status", lambda: (True, ""))
 
     class FakeThread:
+        interrupted = False
         def __init__(self, device_index=None, device_name=""):
             from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -417,3 +419,32 @@ def test_no_green_flash_when_nothing_was_understood_and_recording_wins(app, sett
     window._recording = False
     window._done_flash.stop()
     window._refresh_state()
+
+
+def test_a_new_recording_cancels_the_idle_unload_of_the_model(app, settings, monkeypatch):
+    window = make(app, settings)
+    monkeypatch.setattr(window, "_preload_local_model", lambda: None)
+    monkeypatch.setattr(main_window, "microphone_support_status", lambda: (True, ""))
+
+    class FakeThread:
+        interrupted = False
+        def __init__(self, **kwargs):
+            self.recording_finished = type("S", (), {"connect": lambda self, f: None})()
+            self.recording_error = self.recording_finished
+        def isRunning(self): return False
+        def start(self): pass
+    monkeypatch.setattr(main_window, "AudioRecordingThread", FakeThread)
+    window._whisper_idle.start(60000)
+    window._start_recording()
+    assert not window._whisper_idle.isActive()
+
+
+def test_a_microphone_that_stopped_early_is_mentioned_with_the_result(app, settings):
+    window = make(app, settings)
+    window._background_recording = False
+    window._recording_cut = True
+    window._on_transcription_ready("some text")
+    assert "microphone stopped early" in window.statusBar().currentMessage()
+    window._recording_cut = False
+    window._on_transcription_ready("more text")
+    assert "microphone" not in window.statusBar().currentMessage()

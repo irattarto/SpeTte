@@ -287,7 +287,7 @@ def _decode_audio_compat(path: str):
     return np.concatenate(chunks).astype(np.float32) / 32768.0
 
 
-def transcribe_file(path: str, plan: Plan, language: Optional[str] = 'hu', hint: str = '',
+def transcribe_file(path: str, plan: Plan, language: Optional[str] = 'hu',
                     progress: Optional[Callable[[float], None]] = None,
                     status: Optional[Callable[[str], None]] = None,
                     should_stop: Optional[Callable[[], bool]] = None) -> Tuple[List[Segment], Plan]:
@@ -314,7 +314,6 @@ def transcribe_file(path: str, plan: Plan, language: Optional[str] = 'hu', hint:
                         audio[0], language=language, beam_size=5, vad_filter=vad,
                         vad_parameters={'min_silence_duration_ms': 500} if vad else None,
                         condition_on_previous_text=False,  # avoids repeated-text loops in long recordings
-                        initial_prompt=hint or None,
                     )
                 try:
                     return run()
@@ -336,7 +335,7 @@ def transcribe_file(path: str, plan: Plan, language: Optional[str] = 'hu', hint:
                     raise TranscriptionCancelled()
                 text = (seg.text or '').strip()
                 if text and is_probably_noise(seg):
-                    logger.info(f"Dropped a segment that is probably not speech: {text!r}")
+                    logger.info("Dropped a segment that is probably not speech")
                 elif text:
                     segments.append(Segment(float(seg.start), float(seg.end), text))
                 if progress:

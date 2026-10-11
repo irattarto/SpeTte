@@ -14,12 +14,11 @@ def _under(path: str, folders) -> bool:
     return any(path == f.rstrip("/") or path.startswith(f.rstrip("/") + "/") for f in folders if f)
 
 
-def clean_environment(extra: Optional[Mapping[str, str]] = None, python_child: bool = False,
+def clean_environment(extra: Optional[Mapping[str, str]] = None,
                       base: Optional[Mapping[str, str]] = None) -> Dict[str, str]:
     """A copy of the environment that is safe to give to another program.
 
-    ``python_child``: the program is a different Python (another Python), so PYTHONHOME/PYTHONPATH of this one
-    are removed. ``extra`` is added last.
+    ``extra`` is added last.
     """
     env = dict(os.environ if base is None else base)
     bundle = [getattr(sys, "_MEIPASS", None), env.get("APPDIR")]
@@ -34,9 +33,6 @@ def clean_environment(extra: Optional[Mapping[str, str]] = None, python_child: b
         env["LD_LIBRARY_PATH"] = os.pathsep.join(parts)
     else:
         env.pop("LD_LIBRARY_PATH", None)
-    if python_child:
-        env.pop("PYTHONHOME", None)
-        env.pop("PYTHONPATH", None)
     if extra:
         env.update(extra)
     return env

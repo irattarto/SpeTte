@@ -26,7 +26,7 @@ jobs:
           cache: pip
       # PyAudio is compiled from source on Linux and needs PortAudio and ALSA headers
       - run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0 portaudio19-dev libasound2-dev libpulse0
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q
         env:
           QT_QPA_PLATFORM: offscreen

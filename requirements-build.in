@@ -1,3 +1,3 @@
--r requirements.txt
+-r requirements-dev.txt
 pyinstaller
 Pillow>=12.3.0   # build only: the Windows icon is made from the PNG

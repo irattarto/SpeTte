@@ -6,5 +6,4 @@ faster-whisper>=1.2.1         # local, offline recognition
 av>=11,<19                    # PyAV 19 removed av.open(metadata_errors=...), which faster-whisper 1.2.x still passes
 requests>=2.34.2              # one-time NVIDIA GPU library download (Windows)
 numpy>=1.26                   # audio decoding (faster-whisper)
-pytest>=9.1.1
 pynput>=1.8.1                  # system-wide recording shortcut (Windows, Linux X11/XWayland)
